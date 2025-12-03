@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leaderboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      flex-direction: column;
+      align-items: center;
+    }
+    .board {
+      width: 100%;
+      max-width: 450px;
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      margin-top: 20px;
+    }
+    h2 { text-align: center; margin-top: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+    tr:hover { background: #eee; }
+    .form-box {
+      width: 100%;
+      max-width: 450px;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover { background: #45a049; }
+    .icon { font-size: 18px; }
+    .error-message {
+      color: red;
+      margin-top: 5px;
+      font-size: 14px;
+      display: none;
+    }
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 999;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 300px;
+      text-align: center;
+    }
+    .modal-content input {
+      margin-bottom: 10px;
+    }
+    .modal-content button {
+      width: 45%;
+      margin: 5px 2.5%;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-box">
+    <h3>Add / Update Player</h3>
+    <input type="text" id="nameInput" placeholder="Enter name" />
+    <div id="nameError" class="error-message">Please enter player name!</div>
+    <input type="number" id="scoreInput" placeholder="Enter kills" />
+    <div id="scoreError" class="error-message">Please enter the correct number of kills!</div>
+    <button onclick="addPlayer()">Save</button>
+  </div>
+
+  <div class="board">
+    <h2>Giant Kills Leaderboard</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Name</th>
+          <th>Kills</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal -->
+  <div id="editModal" class="modal">
+    <div class="modal-content">
+      <h4>Edit Player</h4>
+      <input type="text" id="modalNameInput" placeholder="Enter new name" />
+      <div>
+        <button id="saveBtn">Save</button>
+        <button id="deleteBtn" style="background:#f44336;">Delete</button>
+      </div>
+      <div style="margin-top:10px;">
+        <button id="cancelBtn" style="background:#ccc;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let leaderboardData = [];
+    let previousScores = {};
+    let holdTimer = null;
+    let currentEditIndex = null;
+
+    const body = document.getElementById("leaderboard-body");
+    const nameError = document.getElementById("nameError");
+    const scoreError = document.getElementById("scoreError");
+    const modal = document.getElementById("editModal");
+    const modalNameInput = document.getElementById("modalNameInput");
+    const saveBtn = document.getElementById("saveBtn");
+    const deleteBtn = document.getElementById("deleteBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+
+    function saveToStorage() {
+      localStorage.setItem("leaderboard", JSON.stringify(leaderboardData));
+      localStorage.setItem("scores", JSON.stringify(previousScores));
+    }
+
+    function loadFromStorage() {
+      const saved = localStorage.getItem("leaderboard");
+      const savedScores = localStorage.getItem("scores");
+      if (saved) leaderboardData = JSON.parse(saved);
+      if (savedScores) previousScores = JSON.parse(savedScores);
+    }
+
+    function getStatusIcon(name, kill) {
+      if (!(name in previousScores)) return "🆕";
+      const old = previousScores[name];
+      if (kill > old) return "⬆️";
+      if (kill < old) return "⬇️";
+      if (kill === old) return "⏺️";
+      return "⚫";
+    }
+
+    function renderBoard() {
+      body.innerHTML = "";
+      leaderboardData.sort((a, b) => b.kill - a.kill);
+
+      leaderboardData.forEach((player, index) => {
+        const icon = getStatusIcon(player.name, player.kill);
+        previousScores[player.name] = player.kill;
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${player.name}</td>
+          <td>${player.kill}</td>
+          <td class="icon">${icon}</td>
+        `;
+        
+        row.addEventListener("mousedown", () => {
+          holdTimer = setTimeout(() => openEditModal(index), 600);
+        });
+        row.addEventListener("touchstart", () => {
+          holdTimer = setTimeout(() => openEditModal(index), 600);
+        });
+        row.addEventListener("mouseup", () => clearTimeout(holdTimer));
+        row.addEventListener("mouseleave", () => clearTimeout(holdTimer));
+        row.addEventListener("touchend", () => clearTimeout(holdTimer));
+        
+        body.appendChild(row);
+      });
+
+      saveToStorage();
+    }
+    
+    function openEditModal(index) {
+      currentEditIndex = index;
+      modalNameInput.value = leaderboardData[index].name;
+      modal.style.display = "flex";
+    }
+    
+    saveBtn.onclick = () => {
+      const newName = modalNameInput.value.trim();
+      if (newName) {
+        leaderboardData[currentEditIndex].name = newName;
+        renderBoard();
+        closeModal();
+      }
+    };
+    deleteBtn.onclick = () => {
+      leaderboardData.splice(currentEditIndex, 1);
+      renderBoard();
+      closeModal();
+    };
+    
+    cancelBtn.onclick = () => closeModal();
+    
+    function closeModal() {
+      modal.style.display = "none";
+      currentEditIndex = null;
+    }
+    
+    function addPlayer() {
+      const name = document.getElementById("nameInput").value.trim();
+      const kill = Number(document.getElementById("scoreInput").value);
+      
+      let valid = true;
+      if (!name) { nameError.style.display = "block"; valid = false; } else { nameError.style.display = "none"; }
+      if (isNaN(kill)) { scoreError.style.display = "block"; valid = false; } else { scoreError.style.display = "none"; }
+      
+      if (!valid) return;
+      
+      const existing = leaderboardData.find(p => p.name === name);
+      if (existing) { existing.kill += kill; } 
+      else { leaderboardData.push({ name, kill }); }
+
+      renderBoard();
+      document.getElementById("nameInput").value = "";
+      document.getElementById("scoreInput").value = "";
+    }
+
+    loadFromStorage();
+    renderBoard();
+  </script>
+</body>
+</html>
